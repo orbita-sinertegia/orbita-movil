@@ -100,6 +100,18 @@ data class Notice(
 )
 
 @Serializable
+data class AppointmentFile(
+    val id: String,
+    val path: String,
+    @SerialName("file_name") val fileName: String,
+    @SerialName("mime_type") val mimeType: String,
+    @SerialName("size_bytes") val sizeBytes: Long = 0,
+    @SerialName("visible_to_client") val visibleToClient: Boolean = false,
+) {
+    val esImagen get() = mimeType.startsWith("image/")
+}
+
+@Serializable
 data class TaskLite(val id: String, val title: String)
 
 @Serializable

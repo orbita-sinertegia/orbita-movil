@@ -115,6 +115,43 @@ class Sesion : ViewModel() {
         }
     }
 
+    /** Entrar con la cuenta de Google del teléfono (Credential Manager + token con nonce). */
+    suspend fun entrarConGoogle(context: android.content.Context) {
+        errorLogin = null
+        val rawNonce = java.util.UUID.randomUUID().toString()
+        val hashed = java.security.MessageDigest.getInstance("SHA-256").digest(rawNonce.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        val opcion = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(com.orbitasinertegia.orbita.BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .setNonce(hashed)
+            .build()
+        val pedido = androidx.credentials.GetCredentialRequest.Builder().addCredentialOption(opcion).build()
+        try {
+            val resultado = androidx.credentials.CredentialManager.create(context).getCredential(context, pedido)
+            val google = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(resultado.credential.data)
+            Repo.signInWithGoogle(google.idToken, rawNonce)
+        } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+            return
+        } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+            errorLogin = "No hay una cuenta de Google en este teléfono. Agrégala en Ajustes o entra con tu correo."
+            return
+        } catch (e: androidx.credentials.exceptions.GetCredentialException) {
+            errorLogin = if ((e.message ?: "").contains("28444") || (e.message ?: "").contains("Developer console", true))
+                "Google todavía no está configurado para esta app. Entra con tu correo."
+            else "No se pudo entrar con Google. Inténtalo de nuevo o entra con tu correo."
+            return
+        } catch (e: Exception) {
+            errorLogin = e.friendly()
+            return
+        }
+        errorLogin = validarCuenta()
+        if (errorLogin == null) {
+            pila.clear(); pila.add(Ruta.Inicio); tab = 0
+            fase = Fase.Lista
+        }
+    }
+
     fun salir() {
         viewModelScope.launch {
             Repo.signOut()
