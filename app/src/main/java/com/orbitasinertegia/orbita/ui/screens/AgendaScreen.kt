@@ -2,7 +2,6 @@ package com.orbitasinertegia.orbita.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,20 +17,20 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +52,7 @@ import com.orbitasinertegia.orbita.data.Fechas
 import com.orbitasinertegia.orbita.data.Kinds
 import com.orbitasinertegia.orbita.data.Repo
 import com.orbitasinertegia.orbita.data.friendly
+import com.orbitasinertegia.orbita.data.hace
 import com.orbitasinertegia.orbita.ui.Chip
 import com.orbitasinertegia.orbita.ui.ErrorTexto
 import com.orbitasinertegia.orbita.ui.Ruta
@@ -73,20 +73,26 @@ fun AgendaScreen(sesion: Sesion) {
     var cargando by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var recarga by remember { mutableIntStateOf(0) }
+    var actualizado by remember { mutableStateOf<String?>(null) }
     var lunes by remember { mutableStateOf(Fechas.hoy().with(DayOfWeek.MONDAY)) }
     var diaElegido by remember { mutableStateOf<LocalDate?>(null) }
     var tipo by remember { mutableStateOf<String?>(null) }
-    var estado by remember { mutableStateOf("todas") }
+    var estado by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(recarga) {
         cargando = true
         runCatching { Repo.appointments() }
-            .onSuccess { citas = it.filter { c -> c.status in ACTIVAS && c.startsAt != null }; error = null }
+            .onSuccess {
+                citas = it.filter { c -> c.status in ACTIVAS && c.startsAt != null }
+                error = null
+                actualizado = java.time.OffsetDateTime.now().toString()
+            }
             .onFailure { error = it.friendly() }
         cargando = false
     }
 
     val semana = (0L..6L).map { lunes.plusDays(it) }
+    val habiles = semana.take(5)
     val visibles = citas.filter { c ->
         val dia = Fechas.parse(c.startsAt)!!.toLocalDate()
         val enRango = if (diaElegido != null) dia == diaElegido else dia in semana
@@ -94,6 +100,7 @@ fun AgendaScreen(sesion: Sesion) {
         enRango && (tipo == null || c.kind == tipo) && when (estado) {
             "pendientes" -> texto == "Pendiente de confirmar" || texto == "Requiere ajuste"
             "confirmadas" -> texto == "Confirmada" || texto == "En curso"
+            "realizadas" -> c.status in listOf("realizada", "incompleta")
             else -> true
         }
     }.groupBy { Fechas.parse(it.startsAt)!!.toLocalDate() }.toSortedMap()
@@ -105,51 +112,54 @@ fun AgendaScreen(sesion: Sesion) {
             Column(Modifier.fillMaxWidth().background(Noche).statusBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Hola, ${sesion.perfil?.name?.substringBefore(' ') ?: ""}", color = Color(0xFFC9C3E3), fontSize = 15.sp)
+                        Text("Hola, ${sesion.saludo}", color = Color(0xFFC9C3E3), fontSize = 15.sp)
                         Text("Mi agenda", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     }
-                    IconButton(onClick = { recarga++ }) { Icon(Icons.Default.Refresh, "Actualizar", tint = Color.White) }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { lunes = lunes.minusWeeks(1); diaElegido = null }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.ChevronLeft, "Semana anterior", tint = Color.White)
+                    Box(
+                        Modifier.size(48.dp).background(Color(0xFF2A2A33), CircleShape).clickable { sesion.tab = 2 },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Outlined.Notifications, "Avisos", tint = Color.White)
+                        if (sesion.noLeidos > 0) Box(Modifier.align(Alignment.TopEnd).padding(10.dp).size(9.dp).background(Ambar, CircleShape))
                     }
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
-                        semana.forEach { dia ->
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Flecha(Icons.Default.ChevronLeft, "Semana anterior") { lunes = lunes.minusWeeks(1); diaElegido = null }
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        habiles.forEach { dia ->
                             val elegido = dia == diaElegido
                             val hoy = dia == Fechas.hoy()
                             Column(
-                                Modifier.width(40.dp)
-                                    .background(if (elegido) Violeta else Color.Transparent, RoundedCornerShape(12.dp))
+                                Modifier.width(48.dp)
+                                    .background(if (elegido) Violeta else Color.Transparent, RoundedCornerShape(14.dp))
                                     .clickable { diaElegido = if (elegido) null else dia }
                                     .padding(vertical = 8.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                Text(Fechas.diaSemana(dia), color = Color(0xFFC9C3E3), fontSize = 12.sp)
-                                Text(
-                                    "${dia.dayOfMonth}", color = if (hoy && !elegido) Ambar else Color.White,
-                                    fontWeight = FontWeight.Bold, fontSize = 18.sp,
-                                )
-                                Box(Modifier.size(5.dp).background(if (dia in conCitas) Ambar else Color.Transparent, CircleShape))
+                                Text(Fechas.diaSemana(dia), color = Color(0xFFC9C3E3), fontSize = 13.sp)
+                                Text("${dia.dayOfMonth}", color = if (hoy && !elegido) Ambar else Color.White, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                                Box(Modifier.size(5.dp).background(if (dia in conCitas && !elegido) Ambar else Color.Transparent, CircleShape))
                             }
                         }
                     }
-                    IconButton(onClick = { lunes = lunes.plusWeeks(1); diaElegido = null }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.ChevronRight, "Semana siguiente", tint = Color.White)
-                    }
+                    Flecha(Icons.Default.ChevronRight, "Semana siguiente") { lunes = lunes.plusWeeks(1); diaElegido = null }
                 }
             }
 
-            // Filtros: tipo y estado.
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(start = 16.dp, top = 12.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Filtro("Todas", tipo == null) { tipo = null }
-                Kinds.all.forEach { k -> Filtro(Kinds.label(k), tipo == k) { tipo = if (tipo == k) null else k } }
-            }
-            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Filtro("Cualquier estado", estado == "todas") { estado = "todas" }
-                Filtro("Pendientes", estado == "pendientes") { estado = "pendientes" }
-                Filtro("Confirmadas", estado == "confirmadas") { estado = "confirmadas" }
+            // Filtros: Todas, Tipo y Estado.
+            Row(Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Filtro("Todas", tipo == null && estado == null) { tipo = null; estado = null }
+                Desplegable(
+                    texto = tipo?.let { Kinds.label(it) } ?: "Tipo",
+                    elegido = tipo != null,
+                    opciones = listOf<Pair<String?, String>>(null to "Todos los tipos") + Kinds.activos.map { it.slug to it.label },
+                ) { tipo = it }
+                Desplegable(
+                    texto = when (estado) { "pendientes" -> "Pendientes"; "confirmadas" -> "Confirmadas"; "realizadas" -> "Realizadas"; else -> "Estado" },
+                    elegido = estado != null,
+                    opciones = listOf<Pair<String?, String>>(null to "Cualquier estado", "pendientes" to "Pendientes", "confirmadas" to "Confirmadas", "realizadas" to "Realizadas"),
+                ) { estado = it }
             }
 
             LazyColumn(
@@ -163,8 +173,8 @@ fun AgendaScreen(sesion: Sesion) {
                 }
                 if (!cargando && visibles.isEmpty() && error == null) item {
                     Text(
-                        "No hay citas en estos días.", color = TextoSuave, textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        if (diaElegido != null) "No hay citas este día." else "No hay citas esta semana.",
+                        color = TextoSuave, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(32.dp),
                     )
                 }
                 visibles.forEach { (dia, delDia) ->
@@ -178,8 +188,9 @@ fun AgendaScreen(sesion: Sesion) {
                 }
                 item {
                     Text(
-                        "Horas en America/Mexico_City", color = TextoSuave, fontSize = 12.sp,
-                        textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        "Horas en America/Mexico_City · " + (actualizado?.let { "actualizado ${Fechas.hace(it)}" } ?: "cargando") + " · toca para actualizar",
+                        color = TextoSuave, fontSize = 12.sp, textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().clickable { recarga++ }.padding(vertical = 8.dp),
                     )
                 }
             }
@@ -187,9 +198,31 @@ fun AgendaScreen(sesion: Sesion) {
 
         FloatingActionButton(
             onClick = { sesion.ir(if (sesion.isAdmin) Ruta.Programar(null) else Ruta.Solicitar) },
-            containerColor = Violeta, contentColor = Color.White,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp),
+            containerColor = Violeta, contentColor = Color.White, shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).size(64.dp),
         ) { Icon(Icons.Default.Add, if (sesion.isAdmin) "Programar cita" else "Solicitar cita") }
+    }
+}
+
+@Composable
+private fun Flecha(icono: androidx.compose.ui.graphics.vector.ImageVector, descripcion: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).background(Color(0xFF2A2A33), RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icono, descripcion, tint = Color.White) }
+}
+
+/** Chip con menú: "Tipo ▾", "Estado ▾". */
+@Composable
+fun <T> Desplegable(texto: String, elegido: Boolean, opciones: List<Pair<T, String>>, onElegir: (T) -> Unit) {
+    var abierto by remember { mutableStateOf(false) }
+    Box {
+        Filtro("$texto ▾", elegido) { abierto = true }
+        DropdownMenu(abierto, onDismissRequest = { abierto = false }) {
+            opciones.forEach { (valor, etiqueta) ->
+                DropdownMenuItem(text = { Text(etiqueta) }, onClick = { onElegir(valor); abierto = false })
+            }
+        }
     }
 }
 

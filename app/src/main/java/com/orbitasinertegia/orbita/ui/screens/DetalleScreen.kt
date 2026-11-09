@@ -2,6 +2,8 @@ package com.orbitasinertegia.orbita.ui.screens
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,7 +60,7 @@ import com.orbitasinertegia.orbita.ui.Chip
 import com.orbitasinertegia.orbita.ui.DialogoTexto
 import com.orbitasinertegia.orbita.ui.ErrorTexto
 import com.orbitasinertegia.orbita.ui.FilaHorario
-import com.orbitasinertegia.orbita.ui.Iniciales
+import com.orbitasinertegia.orbita.ui.InicialesRol
 import com.orbitasinertegia.orbita.ui.Ruta
 import com.orbitasinertegia.orbita.ui.SelectorHorario
 import com.orbitasinertegia.orbita.ui.Sesion
@@ -162,7 +164,7 @@ fun DetalleScreen(sesion: Sesion, id: String) {
                 Titulo("Participantes")
                 c.participants.sortedByDescending { it.userId == c.coordinatorId }.forEach { p ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Iniciales(p.user?.name ?: "?")
+                        InicialesRol(p.user?.name ?: "?", p.user?.role)
                         Spacer(Modifier.size(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(p.user?.name ?: "Participante", fontWeight = FontWeight.SemiBold)
@@ -259,6 +261,11 @@ private fun Acciones(
                     BotonSecundario("Reprogramar", { onGo(Ruta.Programar(c.id)) }, Modifier.weight(1f), enabled = !ocupado)
                     BotonPrincipal("Iniciar", onIniciar, Modifier.weight(1f), enabled = !ocupado)
                 }
+                c.participants.firstOrNull { it.response == "cambio_solicitado" }?.let { p ->
+                    TextButton(onClick = { onGo(Ruta.Cambio(c.id, p.userId)) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Revisar el cambio que pide ${p.user?.name ?: "un invitado"}", color = Violeta, fontWeight = FontWeight.SemiBold)
+                    }
+                }
                 TextButton(onClick = { onAccion("cancelar") }, modifier = Modifier.fillMaxWidth()) { Text("Cancelar cita", color = TextoSuave) }
             }
             sesion.isAdmin && c.status == "en_curso" -> {
@@ -272,27 +279,39 @@ private fun Acciones(
     }
 }
 
-/** Pedir otro horario: 1 a 3 opciones y una nota. */
+/** Pedir otro horario: hoja inferior con 1 a 3 opciones y una nota. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProponerHorarios(onDismiss: () -> Unit, onConfirm: (List<Slot>, String?) -> Unit) {
     val horarios = remember { mutableStateListOf<Slot>() }
     var eligiendo by remember { mutableStateOf(false) }
     var nota by remember { mutableStateOf("") }
-    if (eligiendo) {
-        SelectorHorario(onDismiss = { eligiendo = false }) { horarios.add(it); eligiendo = false }
-        return
-    }
-    AlertDialog(
+    androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("Proponer otro horario") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                horarios.forEachIndexed { i, s -> FilaHorario(s, onRemove = { horarios.removeAt(i) }) }
-                if (horarios.size < 3) TextButton(onClick = { eligiendo = true }) { Text("+ Agregar horario", color = Violeta) }
-                androidx.compose.material3.OutlinedTextField(nota, { nota = it }, label = { Text("Nota (opcional)") })
-            }
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(horarios.toList(), nota.trim().ifBlank { null }) }, enabled = horarios.isNotEmpty()) { Text("Enviar") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
-    )
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Proponer otro horario", fontWeight = FontWeight.Bold, fontSize = 22.sp)
+            Text("Tus horarios (1 a 3)", color = com.orbitasinertegia.orbita.ui.theme.Indigo, fontWeight = FontWeight.SemiBold)
+            horarios.forEachIndexed { i, s -> FilaHorario(s, onRemove = { horarios.removeAt(i) }) }
+            if (horarios.size < 3) Text(
+                "+ Agregar horario", color = Violeta, fontWeight = FontWeight.SemiBold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.outline, androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                    .clickable { eligiendo = true }.padding(16.dp),
+            )
+            Text("Nota (opcional)", color = com.orbitasinertegia.orbita.ui.theme.Indigo, fontWeight = FontWeight.SemiBold)
+            androidx.compose.material3.OutlinedTextField(
+                nota, { nota = it }, minLines = 2, modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Cuéntale al coordinador por qué") },
+            )
+            BotonPrincipal(
+                "Enviar", { onConfirm(horarios.toList(), nota.trim().ifBlank { null }) },
+                Modifier.fillMaxWidth(), enabled = horarios.isNotEmpty(),
+            )
+        }
+    }
+    if (eligiendo) SelectorHorario(onDismiss = { eligiendo = false }) { horarios.add(it); eligiendo = false }
 }
