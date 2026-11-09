@@ -130,6 +130,23 @@ fun LoginScreen(sesion: Sesion) {
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+        val context = androidx.compose.ui.platform.LocalContext.current
+        androidx.compose.material3.OutlinedButton(
+            onClick = {
+                cargando = true; info = null
+                scope.launch { sesion.entrarConGoogle(context); cargando = false }
+            },
+            enabled = !cargando,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(26.dp),
+            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(containerColor = Color.White),
+        ) {
+            Text("G", color = Color(0xFF4285F4), fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            Spacer(Modifier.size(10.dp))
+            Text("Continuar con Google", color = Noche, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        }
+
         val mensaje = sesion.errorLogin ?: info
         if (mensaje != null) {
             Spacer(Modifier.height(20.dp))

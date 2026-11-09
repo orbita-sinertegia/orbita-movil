@@ -192,6 +192,11 @@ fun DetalleScreen(sesion: Sesion, id: String) {
                 }
             }
 
+            if (c.status in listOf("en_curso", "realizada", "incompleta")) Tarjeta {
+                Titulo("Evidencia")
+                com.orbitasinertegia.orbita.ui.EvidenciaGaleria(c.id, puedeEditar = sesion.isAdmin)
+            }
+
             c.cancelReason?.let { Tarjeta { Titulo("Motivo de cancelación"); Text(it) } }
             c.closeNote?.let { Tarjeta { Titulo("Nota de cierre"); Text(it) } }
         }

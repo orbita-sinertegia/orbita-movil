@@ -134,14 +134,7 @@ fun EnCursoScreen(sesion: Sesion, id: String) {
 
             Tarjeta {
                 Titulo("Evidencia")
-                Row(
-                    Modifier.fillMaxWidth().background(com.orbitasinertegia.orbita.ui.theme.Crema, RoundedCornerShape(14.dp)).padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(androidx.compose.material.icons.Icons.Outlined.PhotoCamera, null, tint = Color(0xFF8A4B00))
-                    Spacer(Modifier.size(12.dp))
-                    Text("La subida de fotos y PDF llegará en la siguiente versión.", color = Color(0xFF8A4B00), fontSize = 15.sp)
-                }
+                com.orbitasinertegia.orbita.ui.EvidenciaGaleria(c.id, puedeEditar = sesion.isAdmin)
             }
 
             Tarjeta {

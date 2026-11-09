@@ -30,6 +30,8 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${localProp("supabase.url")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProp("supabase.anonKey")}\"")
         buildConfigField("String", "WEB_URL", "\"https://orbita-web-ten.vercel.app\"")
+        // ID público del cliente web de Google (el mismo que usa la web). No es secreto.
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"614135047244-sgsnsavc2u5pdvjkkg3pjhnvksj6no3l.apps.googleusercontent.com\"")
     }
 
     buildTypes {
@@ -63,6 +65,10 @@ dependencies {
     implementation(platform(libs.supabase.bom))
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.auth)
+    implementation(libs.supabase.storage)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play)
+    implementation(libs.googleid)
     implementation(libs.ktor.client.okhttp)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

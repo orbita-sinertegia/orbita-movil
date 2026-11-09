@@ -4,7 +4,13 @@ import com.orbitasinertegia.orbita.BuildConfig
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.exception.AuthRestException
+import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.IDToken
+import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.storage.storage
+import io.ktor.http.ContentType
+import kotlin.time.Duration.Companion.minutes
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.exceptions.HttpRequestException
@@ -34,6 +40,7 @@ object Repo {
     val client = createSupabaseClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY) {
         install(Auth)
         install(Postgrest)
+        install(Storage)
         defaultSerializer = KotlinXSerializer(json)
     }
 
@@ -53,6 +60,15 @@ object Repo {
         client.auth.signInWith(Email) {
             this.email = email.trim()
             this.password = password
+        }
+    }
+
+    /** Google: el token lo da el selector de cuentas del teléfono; Supabase valida token y nonce. */
+    suspend fun signInWithGoogle(idToken: String, rawNonce: String) {
+        client.auth.signInWith(IDToken) {
+            this.idToken = idToken
+            provider = Google
+            nonce = rawNonce
         }
     }
 
@@ -127,6 +143,38 @@ object Repo {
             put("p_appointment_id", appointmentId); put("p_user_id", userId); put("p_accept", accept)
             put("p_slot_index", slotIndex); put("p_note", note)
         })
+    }
+
+    // Evidencia (bucket privado) ------------------------------------------------------
+
+    private const val EVIDENCIA = "appointment-evidence"
+
+    suspend fun files(appointmentId: String): List<AppointmentFile> =
+        client.from("appointment_files").select {
+            filter { eq("appointment_id", appointmentId) }
+            order("created_at", Order.ASCENDING)
+        }.decodeList()
+
+    suspend fun uploadEvidence(appointmentId: String, bytes: ByteArray, fileName: String, mime: String, visibleToClient: Boolean) {
+        val ext = when (mime) { "image/png" -> "png"; "image/webp" -> "webp"; "image/heic" -> "heic"; "application/pdf" -> "pdf"; else -> "jpg" }
+        val path = "$appointmentId/${java.util.UUID.randomUUID()}.$ext"
+        client.storage.from(EVIDENCIA).upload(path, bytes) {
+            upsert = false
+            contentType = ContentType.parse(mime)
+        }
+        rpc("register_appointment_file", buildJsonObject {
+            put("p_appointment_id", appointmentId); put("p_path", path); put("p_file_name", fileName)
+            put("p_mime_type", mime); put("p_size_bytes", bytes.size.toLong()); put("p_visible_to_client", visibleToClient)
+        })
+    }
+
+    suspend fun downloadEvidence(path: String): ByteArray = client.storage.from(EVIDENCIA).downloadAuthenticated(path)
+
+    suspend fun evidenceUrl(path: String): String = client.storage.from(EVIDENCIA).createSignedUrl(path, 10.minutes)
+
+    suspend fun deleteEvidence(fileId: String) {
+        val path = rpc("delete_appointment_file", buildJsonObject { put("p_file_id", fileId) }).decodeAs<String>()
+        runCatching { client.storage.from(EVIDENCIA).delete(path) }
     }
 
     suspend fun notices(): List<Notice> {
@@ -243,6 +291,8 @@ object Repo {
 /** Mensaje entendible para la persona a partir de un error de Supabase. */
 fun Throwable.friendly(): String = when (this) {
     is AuthRestException -> when {
+        (errorDescription + error).contains("saving new user", ignoreCase = true) ->
+            "Esta cuenta no tiene una invitación. Pídele a tu administrador un enlace de invitación y regístrate desde ahí."
         error.contains("invalid", ignoreCase = true) -> "Correo o contraseña incorrectos."
         else -> errorDescription.ifBlank { error }
     }
