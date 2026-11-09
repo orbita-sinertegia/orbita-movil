@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
@@ -50,6 +51,7 @@ import com.orbitasinertegia.orbita.data.Repo
 import com.orbitasinertegia.orbita.data.Slot
 import com.orbitasinertegia.orbita.data.friendly
 import com.orbitasinertegia.orbita.ui.Aviso
+import com.orbitasinertegia.orbita.ui.DialogoNuevoTipo
 import com.orbitasinertegia.orbita.ui.BotonPrincipal
 import com.orbitasinertegia.orbita.ui.ErrorTexto
 import com.orbitasinertegia.orbita.ui.Etiqueta
@@ -77,28 +79,47 @@ fun BarraClara(titulo: String, onBack: () -> Unit, extra: @Composable () -> Unit
 
 /** Botones de tipo de cita (Reunión, Grabación, Entrevista, Accesos). */
 @Composable
-fun SelectorTipo(tipo: String, onTipo: (String) -> Unit) {
+fun SelectorTipo(tipo: String, puedeAgregar: Boolean = false, onTipo: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var nuevo by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val opciones = Kinds.activos.map { it.slug } + if (puedeAgregar) listOf(NUEVO_TIPO) else emptyList()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Kinds.all.chunked(2).forEach { fila ->
+        opciones.chunked(2).forEach { fila ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 fila.forEach { k ->
                     val elegido = k == tipo
+                    val esNuevo = k == NUEVO_TIPO
                     Text(
-                        Kinds.label(k),
+                        if (esNuevo) "+ Otro tipo" else Kinds.label(k),
                         textAlign = TextAlign.Center,
-                        fontWeight = if (elegido) FontWeight.Bold else FontWeight.Medium,
-                        color = if (elegido) Indigo else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (elegido || esNuevo) FontWeight.Bold else FontWeight.Medium,
+                        color = when { elegido -> Indigo; esNuevo -> Violeta; else -> MaterialTheme.colorScheme.onSurface },
                         modifier = Modifier.weight(1f)
                             .background(if (elegido) VioletaClaro else MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
                             .border(if (elegido) 2.dp else 1.dp, if (elegido) Violeta else MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
-                            .clickable { onTipo(k) }
+                            .clickable { if (esNuevo) nuevo = true else onTipo(k) }
                             .padding(vertical = 14.dp),
                     )
                 }
+                if (fila.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+        ErrorTexto(error)
+    }
+    if (nuevo) DialogoNuevoTipo(onDismiss = { nuevo = false }) { nombre, modalidad ->
+        nuevo = false; error = null
+        scope.launch {
+            runCatching {
+                val clave = Repo.addKind(nombre, modalidad)
+                Kinds.lista = Repo.kinds()
+                clave
+            }.onSuccess(onTipo).onFailure { error = it.friendly() }
         }
     }
 }
+
+private const val NUEVO_TIPO = "__nuevo__"
 
 /** Lista desplegable sencilla de proyectos. */
 @Composable
@@ -163,14 +184,17 @@ fun SolicitarScreen(sesion: Sesion) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Column { Etiqueta("Tipo de actividad"); SelectorTipo(tipo) { tipo = it } }
+            Column { Etiqueta("Tipo de actividad"); SelectorTipo(tipo, puedeAgregar = sesion.isAdmin) { tipo = it } }
             Column {
                 Etiqueta("Proyecto")
                 SelectorProyecto(proyectos, proyecto, permitirNinguno = !esCliente) { proyecto = it }
             }
             Aviso(
-                if (Kinds.suggestedModality(tipo) == "presencial") "Las grabaciones son presenciales, en el estudio."
-                else "Esta cita será virtual: recibirás el enlace de Meet o Zoom al confirmarse.",
+                listOfNotNull(
+                    when (proyecto?.recordingMode) { "oficina" -> "Proyecto en Oficina"; "remota" -> "Proyecto remoto"; else -> null },
+                    "${Kinds.label(tipo)}: se sugiere cita ${Kinds.suggestedModality(tipo)}" +
+                        if (Kinds.suggestedModality(tipo) == "virtual") " por Meet o Zoom." else ".",
+                ).joinToString(" · "),
             )
             Column {
                 Etiqueta("Motivo")

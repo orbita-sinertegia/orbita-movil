@@ -338,3 +338,94 @@ fun FilaHorario(slot: Slot, onRemove: (() -> Unit)?, onClick: (() -> Unit)? = nu
     }
 }
 
+
+/** Elegir día y hora de inicio (sin duración). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SelectorFechaHora(inicialHora: Int = 10, inicialMinuto: Int = 0, onDismiss: () -> Unit, onPick: (LocalDate, LocalTime) -> Unit) {
+    var dia by remember { mutableStateOf<LocalDate?>(null) }
+    val hoyUtc = remember { Fechas.hoy().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
+    if (dia == null) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = hoyUtc,
+            selectableDates = object : androidx.compose.material3.SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis >= hoyUtc
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = onDismiss,
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { dia = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                }) { Text("Siguiente") }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+        ) { DatePicker(state, title = { Text("Elige el día", Modifier.padding(16.dp)) }) }
+    } else {
+        SelectorHora("Hora de inicio", inicialHora, inicialMinuto, onDismiss) { onPick(dia!!, it) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SelectorHora(titulo: String, hora: Int, minuto: Int, onDismiss: () -> Unit, onPick: (LocalTime) -> Unit) {
+    val state = rememberTimePickerState(initialHour = hora, initialMinute = minuto, is24Hour = true)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(titulo) },
+        text = { TimePicker(state) },
+        confirmButton = { TextButton(onClick = { onPick(LocalTime.of(state.hour, state.minute)) }) { Text("Listo") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+/** Agregar un tipo de cita nuevo (solo admins). */
+@Composable
+fun DialogoNuevoTipo(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+    var nombre by remember { mutableStateOf("") }
+    var modalidad by remember { mutableStateOf("virtual") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Nuevo tipo de cita") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    nombre, { nombre = it.take(40) }, label = { Text("Nombre") }, singleLine = true,
+                    placeholder = { Text("Ej. Sesión de fotos") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                )
+                Text("Modalidad sugerida", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("presencial" to "Presencial", "virtual" to "Virtual").forEach { (valor, texto) ->
+                        val elegido = modalidad == valor
+                        Text(
+                            texto, fontWeight = FontWeight.SemiBold,
+                            color = if (elegido) Color.White else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.background(if (elegido) Violeta else VioletaClaro, RoundedCornerShape(10.dp))
+                                .clickable { modalidad = valor }.padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(nombre.trim(), modalidad) }, enabled = nombre.trim().length >= 2) { Text("Agregar") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } },
+    )
+}
+
+/** Colores de las iniciales según el rol, como en los mockups. */
+@Composable
+fun InicialesRol(nombre: String, rol: String?) = when (rol) {
+    "client" -> Iniciales(nombre, Crema, Color(0xFF8A4B00))
+    "admin" -> Iniciales(nombre, VioletaClaro, Indigo)
+    else -> Iniciales(nombre, Color(0xFFECEBF2), Indigo)
+}
+
+/** Etiqueta oscura de rol para las barras superiores ("Administrador"). */
+@Composable
+fun EtiquetaRol(texto: String) {
+    Text(
+        texto, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.background(Indigo, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+    )
+}
