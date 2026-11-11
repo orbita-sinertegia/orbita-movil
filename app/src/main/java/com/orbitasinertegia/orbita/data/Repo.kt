@@ -177,6 +177,16 @@ object Repo {
         runCatching { client.storage.from(EVIDENCIA).delete(path) }
     }
 
+    // Teléfono para notificaciones push --------------------------------------------------
+
+    suspend fun registerDeviceToken(token: String) {
+        rpc("register_device_token", buildJsonObject { put("p_token", token) })
+    }
+
+    suspend fun unregisterDeviceToken(token: String) {
+        rpc("unregister_device_token", buildJsonObject { put("p_token", token) })
+    }
+
     suspend fun notices(): List<Notice> {
         val id = myId() ?: return emptyList()
         return client.from("notifications").select(Columns.list("id", "title", "message", "type", "read", "created_at", "appointment_id")) {

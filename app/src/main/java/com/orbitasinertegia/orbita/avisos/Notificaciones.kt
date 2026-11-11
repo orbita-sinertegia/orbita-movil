@@ -68,42 +68,64 @@ object Notificaciones {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+    /** Desde el trabajo periódico: calcula los botones con la cita descargada. */
     fun mostrar(context: Context, aviso: Notice, cita: Appointment?) {
+        val mio = cita?.participants?.firstOrNull { it.userId == com.orbitasinertegia.orbita.data.Repo.myId() }
+        mostrar(
+            context, aviso.id, aviso.title, aviso.message, aviso.appointmentId,
+            puedeAceptar = cita?.status == "programada" && mio != null && mio.response != "aceptada",
+            meetingUrl = if (cita?.modality == "virtual") cita.meetingUrl else null,
+            mapsUrl = if (cita?.modality == "presencial") mapsUrl(cita.address, cita.latitude, cita.longitude) else null,
+        )
+    }
+
+    /** Desde una notificación push: los datos ya vienen calculados por el servidor. */
+    fun mostrarPush(context: Context, datos: Map<String, String>) {
+        val id = datos["id"] ?: return
+        mostrar(
+            context, id, datos["title"].orEmpty(), datos["message"], datos["appointment_id"]?.ifBlank { null },
+            puedeAceptar = datos["puede_aceptar"] == "1",
+            meetingUrl = datos["meeting_url"]?.ifBlank { null },
+            mapsUrl = datos["maps_url"]?.ifBlank { null },
+        )
+    }
+
+    fun mostrar(
+        context: Context, avisoId: String, titulo: String, mensaje: String?, citaId: String?,
+        puedeAceptar: Boolean, meetingUrl: String?, mapsUrl: String?,
+    ) {
         if (!permitidas(context)) return
-        val id = idDe(aviso)
-        val esRecordatorio = aviso.title.contains("Recordatorio")
-        val esInvitacion = aviso.title.contains("Nueva cita") || aviso.title.contains("Cita reprogramada") ||
-            aviso.title.contains("Cambio no aceptado")
+        val id = avisoId.hashCode()
+        val esRecordatorio = titulo.contains("Recordatorio")
+        val esInvitacion = titulo.contains("Nueva cita") || titulo.contains("Cita reprogramada") || titulo.contains("Cambio no aceptado")
         val canal = when {
             esRecordatorio -> CANAL_RECORDATORIOS
-            aviso.appointmentId != null -> CANAL_CITAS
+            citaId != null -> CANAL_CITAS
             else -> CANAL_GENERAL
         }
         val b = NotificationCompat.Builder(context, canal)
             .setSmallIcon(R.drawable.ic_notificacion)
             .setColor(0xFF6A5ACD.toInt())
-            .setContentTitle(aviso.title)
-            .setContentText(aviso.message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(aviso.message))
+            .setContentTitle(titulo)
+            .setContentText(mensaje)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(mensaje))
             .setAutoCancel(true)
+            // Si el mismo aviso llega por push y por la revisión periódica, suena una sola vez.
+            .setOnlyAlertOnce(true)
             .setPriority(if (canal == CANAL_GENERAL) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_HIGH)
             // 1 y 2: tocar la notificación abre la app (o el detalle de la cita).
-            .setContentIntent(abrirApp(context, aviso.appointmentId, id))
+            .setContentIntent(abrirApp(context, citaId, id))
 
         // 3: botones.
-        if (aviso.appointmentId != null && (esInvitacion || esRecordatorio)) {
-            b.addAction(0, "Ver", abrirApp(context, aviso.appointmentId, id + 1))
+        if (citaId != null && (esInvitacion || esRecordatorio)) {
+            b.addAction(0, "Ver", abrirApp(context, citaId, id + 1))
         }
-        val mio = cita?.participants?.firstOrNull { it.userId == com.orbitasinertegia.orbita.data.Repo.myId() }
-        if (esInvitacion && aviso.appointmentId != null && cita?.status == "programada" && mio != null && mio.response != "aceptada") {
-            b.addAction(0, "Aceptar", AccionReceiver.aceptar(context, aviso.appointmentId, aviso.id, id))
+        if (esInvitacion && citaId != null && puedeAceptar) {
+            b.addAction(0, "Aceptar", AccionReceiver.aceptar(context, citaId, avisoId, id))
         }
-        if (esRecordatorio && cita != null) {
-            if (cita.modality == "virtual" && cita.meetingUrl != null) {
-                b.addAction(0, "Unirse", abrirEnlace(context, cita.meetingUrl, id + 2))
-            } else mapsUrl(cita.address, cita.latitude, cita.longitude)?.let {
-                b.addAction(0, "Cómo llegar", abrirEnlace(context, it, id + 2))
-            }
+        if (esRecordatorio) {
+            if (meetingUrl != null) b.addAction(0, "Unirse", abrirEnlace(context, meetingUrl, id + 2))
+            else if (mapsUrl != null) b.addAction(0, "Cómo llegar", abrirEnlace(context, mapsUrl, id + 2))
         }
         try {
             NotificationManagerCompat.from(context).notify(id, b.build())
