@@ -112,6 +112,23 @@ object Repo {
             limit(100)
         }.decodeList()
 
+    suspend fun kinds(): List<AppointmentKind> =
+        client.from("appointment_kinds").select {
+            order("sort_order", Order.ASCENDING)
+        }.decodeList()
+
+    suspend fun addKind(label: String, defaultModality: String): String =
+        rpc("add_appointment_kind", buildJsonObject {
+            put("p_label", label); put("p_default_modality", defaultModality)
+        }).decodeAs<String>()
+
+    suspend fun resolveChange(appointmentId: String, userId: String, accept: Boolean, slotIndex: Int, note: String?) {
+        rpc("resolve_change_request", buildJsonObject {
+            put("p_appointment_id", appointmentId); put("p_user_id", userId); put("p_accept", accept)
+            put("p_slot_index", slotIndex); put("p_note", note)
+        })
+    }
+
     suspend fun notices(): List<Notice> {
         val id = myId() ?: return emptyList()
         return client.from("notifications").select(Columns.list("id", "title", "message", "type", "read", "created_at", "appointment_id")) {

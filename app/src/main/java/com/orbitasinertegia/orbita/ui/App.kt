@@ -33,11 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.orbitasinertegia.orbita.data.Kinds
 import com.orbitasinertegia.orbita.data.Profile
 import com.orbitasinertegia.orbita.data.Repo
 import com.orbitasinertegia.orbita.data.friendly
 import com.orbitasinertegia.orbita.ui.screens.AgendaScreen
 import com.orbitasinertegia.orbita.ui.screens.AvisosScreen
+import com.orbitasinertegia.orbita.ui.screens.CambioScreen
 import com.orbitasinertegia.orbita.ui.screens.DetalleScreen
 import com.orbitasinertegia.orbita.ui.screens.EnCursoScreen
 import com.orbitasinertegia.orbita.ui.screens.LoginScreen
@@ -55,6 +57,7 @@ sealed interface Ruta {
     data object Solicitar : Ruta
     data class Programar(val id: String?) : Ruta
     data class EnCurso(val id: String) : Ruta
+    data class Cambio(val id: String, val userId: String) : Ruta
 }
 
 enum class Fase { Cargando, Login, Lista }
@@ -93,7 +96,7 @@ class Sesion : ViewModel() {
             p.isSuperAdmin != true && Repo.licenseSuspended() -> "La licencia de la agencia está suspendida. Contacta al administrador."
             else -> null
         }
-        if (motivo != null) Repo.signOut() else perfil = p
+        if (motivo != null) Repo.signOut() else { perfil = p; cargarTipos() }
         return motivo
     }
 
@@ -124,6 +127,16 @@ class Sesion : ViewModel() {
     fun reemplazar(ruta: Ruta) { if (pila.size > 1) pila.removeAt(pila.lastIndex); pila.add(ruta); navegaciones++ }
     fun atras() { if (pila.size > 1) pila.removeAt(pila.lastIndex); navegaciones++ }
 
+    fun cargarTipos() {
+        viewModelScope.launch {
+            runCatching { Repo.kinds() }.onSuccess { if (it.isNotEmpty()) Kinds.lista = it }
+        }
+    }
+
+    /** Nombre corto para saludar: el primer nombre, o la parte del correo antes de la @. */
+    val saludo get() = perfil?.fullName?.trim()?.takeIf { it.isNotBlank() && !it.contains('@') }?.substringBefore(' ')
+        ?: perfil?.email?.substringBefore('@') ?: ""
+
     fun contarAvisos() {
         viewModelScope.launch {
             noLeidos = runCatching { Repo.notices().count { !it.read } }.getOrDefault(noLeidos)
@@ -148,6 +161,7 @@ fun OrbitaApp(sesion: Sesion = viewModel()) {
                     Ruta.Solicitar -> SolicitarScreen(sesion)
                     is Ruta.Programar -> ProgramarScreen(sesion, ruta.id)
                     is Ruta.EnCurso -> EnCursoScreen(sesion, ruta.id)
+                    is Ruta.Cambio -> CambioScreen(sesion, ruta.id, ruta.userId)
                 }
             }
         }

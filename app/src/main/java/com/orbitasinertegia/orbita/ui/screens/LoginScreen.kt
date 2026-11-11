@@ -71,10 +71,16 @@ fun LoginScreen(sesion: Sesion) {
             .verticalScroll(rememberScrollState()).padding(24.dp),
     ) {
         Spacer(Modifier.height(32.dp))
-        Image(
-            painterResource(R.drawable.logo_orbita), "Logo de Órbita",
-            modifier = Modifier.size(64.dp).clip(RoundedCornerShape(16.dp)),
-        )
+        androidx.compose.foundation.layout.Box(
+            Modifier.size(64.dp).background(Violeta, RoundedCornerShape(18.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painterResource(R.drawable.logo_orbita), "Logo de Órbita",
+                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+                modifier = Modifier.size(40.dp),
+            )
+        }
         Spacer(Modifier.height(20.dp))
         Text("Órbita Citas", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))

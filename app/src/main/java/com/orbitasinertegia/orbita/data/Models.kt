@@ -1,5 +1,8 @@
 package com.orbitasinertegia.orbita.data
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -114,15 +117,28 @@ data class LicenseStatus(val status: String? = null)
 /** Invitado al programar una cita (pantalla "Programar cita"). */
 data class Invitee(val user: Profile, val required: Boolean, val roleLabel: String?)
 
+@Serializable
+data class AppointmentKind(
+    val slug: String,
+    val label: String,
+    @SerialName("default_modality") val defaultModality: String = "virtual",
+    val active: Boolean = true,
+    @SerialName("sort_order") val sortOrder: Int = 100,
+)
+
+/** Tipos de cita. Se cargan de la base (los admins pueden agregar más); estos son los de respaldo. */
 object Kinds {
-    val all = listOf("grabacion", "reunion", "entrevista", "accesos")
-    fun label(kind: String) = when (kind) {
-        "grabacion" -> "Grabación"
-        "reunion" -> "Reunión"
-        "entrevista" -> "Entrevista"
-        "accesos" -> "Accesos a cuentas"
-        else -> kind
-    }
+    private val base = listOf(
+        AppointmentKind("reunion", "Reunión", "virtual", sortOrder = 1),
+        AppointmentKind("grabacion", "Grabación", "presencial", sortOrder = 2),
+        AppointmentKind("entrevista", "Entrevista", "virtual", sortOrder = 3),
+        AppointmentKind("accesos", "Accesos a cuentas", "virtual", sortOrder = 4),
+    )
+    var lista by mutableStateOf(base)
+
+    val activos get() = lista.filter { it.active }.sortedBy { it.sortOrder }
+    val all get() = activos.map { it.slug }
+    fun label(kind: String) = lista.firstOrNull { it.slug == kind }?.label ?: kind
     /** Grabación: presencial en el estudio. Lo demás (entrevistas, accesos a Meta, reuniones): virtual. */
-    fun suggestedModality(kind: String) = if (kind == "grabacion") "presencial" else "virtual"
+    fun suggestedModality(kind: String) = lista.firstOrNull { it.slug == kind }?.defaultModality ?: "virtual"
 }

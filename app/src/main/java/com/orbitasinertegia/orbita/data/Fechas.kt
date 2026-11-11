@@ -38,3 +38,16 @@ object Fechas {
 
     fun hoy(): LocalDate = LocalDate.now(ZONA)
 }
+
+/** "hace 5 min", "hace 1 h", "ayer" o la fecha corta. */
+fun Fechas.hace(value: String?): String {
+    val t = parse(value) ?: return ""
+    val minutos = java.time.Duration.between(t, ZonedDateTime.now(ZONA)).toMinutes()
+    return when {
+        minutos < 1 -> "ahora"
+        minutos < 60 -> "hace $minutos min"
+        minutos < 24 * 60 -> "hace ${minutos / 60} h"
+        t.toLocalDate() == hoy().minusDays(1) -> "ayer"
+        else -> diaCorto(t).substringAfter(' ')
+    }
+}

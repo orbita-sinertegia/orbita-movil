@@ -66,7 +66,8 @@ import com.orbitasinertegia.orbita.ui.ErrorTexto
 import com.orbitasinertegia.orbita.ui.Etiqueta
 import com.orbitasinertegia.orbita.ui.FilaHorario
 import com.orbitasinertegia.orbita.ui.Ruta
-import com.orbitasinertegia.orbita.ui.SelectorHorario
+import com.orbitasinertegia.orbita.ui.SelectorFechaHora
+import com.orbitasinertegia.orbita.ui.SelectorHora
 import com.orbitasinertegia.orbita.ui.Sesion
 import com.orbitasinertegia.orbita.ui.Tarjeta
 import com.orbitasinertegia.orbita.ui.theme.Indigo
@@ -104,6 +105,7 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
     var conflictos by remember { mutableStateOf<List<Conflict>>(emptyList()) }
 
     var eligiendoHorario by remember { mutableStateOf(false) }
+    var eligiendoFin by remember { mutableStateOf(false) }
     var agregando by remember { mutableStateOf(false) }
     var publicando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -153,10 +155,7 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
         BarraClara(if (cita?.status == "programada") "Reprogramar cita" else "Programar cita", onBack = { sesion.atras() }) {
-            Text(
-                "Coordinador", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.background(Noche, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
-            )
+            com.orbitasinertegia.orbita.ui.EtiquetaRol("Administrador")
         }
         if (cargando) {
             Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = Violeta) }
@@ -180,7 +179,7 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
                 }
             }
 
-            Column { Etiqueta("Tipo"); SelectorTipo(tipo) { tipo = it; modalidad = Kinds.suggestedModality(it) } }
+            Column { Etiqueta("Tipo"); SelectorTipo(tipo, puedeAgregar = true) { tipo = it; modalidad = Kinds.suggestedModality(it) } }
             Column {
                 Etiqueta("Título")
                 OutlinedTextField(titulo, { titulo = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
@@ -188,14 +187,19 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
             }
             Column { Etiqueta("Proyecto"); SelectorProyecto(proyectos, proyecto, permitirNinguno = true) { proyecto = it; tarea = null } }
 
-            Column {
-                Etiqueta("Horario")
-                if (horario != null) FilaHorario(horario!!, onRemove = null, onClick = { eligiendoHorario = true })
-                else Text(
-                    "Elegir día y hora", color = Violeta, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
-                        .clickable { eligiendoHorario = true }.padding(16.dp),
-                )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val inicio = Fechas.parse(horario?.startsAt)
+                val fin = Fechas.parse(horario?.endsAt)
+                Column(Modifier.weight(1f)) {
+                    Etiqueta("Inicio")
+                    CampoFecha(inicio?.let { "${it.dayOfMonth} ${Fechas.diaCorto(it).substringAfterLast(' ')} · ${Fechas.hora(it)}" } ?: "Elegir") { eligiendoHorario = true }
+                }
+                Column(Modifier.weight(1f)) {
+                    Etiqueta("Fin")
+                    CampoFecha(fin?.let { "${it.dayOfMonth} ${Fechas.diaCorto(it).substringAfterLast(' ')} · ${Fechas.hora(it)}" } ?: "—") {
+                        if (horario != null) eligiendoFin = true else eligiendoHorario = true
+                    }
+                }
             }
 
             Column {
@@ -225,7 +229,13 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Etiqueta("Invitados")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { Etiqueta("Invitados") }
+                    Text(
+                        "+ Agregar", color = Violeta, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable { agregando = true }.padding(6.dp),
+                    )
+                }
                 Text("Tú participas como coordinador.", color = TextoSuave, fontSize = 13.sp)
                 invitados.forEachIndexed { i, inv ->
                     val estaOcupado = ocupado(inv.user.id)
@@ -257,8 +267,8 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
                         }
                     }
                 }
-                Text(
-                    "+ Agregar invitado", color = Violeta, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                if (invitados.isEmpty()) Text(
+                    "Agrega al menos un invitado para publicar.", color = TextoSuave, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
                         .clickable { agregando = true }.padding(14.dp),
                 )
@@ -306,7 +316,31 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
         }
     }
 
-    if (eligiendoHorario) SelectorHorario(onDismiss = { eligiendoHorario = false }) { horario = it; eligiendoHorario = false }
+    // Inicio: día y hora; se conserva la duración (1 h si no había horario).
+    if (eligiendoHorario) {
+        val previo = Fechas.parse(horario?.startsAt)
+        SelectorFechaHora(previo?.hour ?: 10, previo?.minute ?: 0, onDismiss = { eligiendoHorario = false }) { dia, hora ->
+            val duracion = horario?.let {
+                java.time.Duration.between(Fechas.parse(it.startsAt), Fechas.parse(it.endsAt)).toMinutes()
+            } ?: 60L
+            val inicio = java.time.ZonedDateTime.of(dia, hora, Fechas.ZONA)
+            horario = Slot(inicio.toOffsetDateTime().toString(), inicio.plusMinutes(duracion).toOffsetDateTime().toString())
+            eligiendoHorario = false
+        }
+    }
+    // Fin: solo la hora, el mismo día del inicio.
+    if (eligiendoFin && horario != null) {
+        val inicio = Fechas.parse(horario!!.startsAt)!!
+        val fin = Fechas.parse(horario!!.endsAt)!!
+        SelectorHora("Hora de fin", fin.hour, fin.minute, onDismiss = { eligiendoFin = false }) { hora ->
+            val nuevoFin = java.time.ZonedDateTime.of(inicio.toLocalDate(), hora, Fechas.ZONA)
+            if (nuevoFin.isAfter(inicio)) {
+                horario = Slot(horario!!.startsAt, nuevoFin.toOffsetDateTime().toString())
+                error = null
+            } else error = "La hora de fin debe ser después del inicio."
+            eligiendoFin = false
+        }
+    }
     if (agregando) ElegirPersona(
         usuarios.filter { u -> u.id != sesion.myId && invitados.none { it.user.id == u.id } },
         onDismiss = { agregando = false },
@@ -356,5 +390,16 @@ private fun ElegirPersona(personas: List<Profile>, onDismiss: () -> Unit, onEleg
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cerrar") } },
+    )
+}
+
+@Composable
+private fun CampoFecha(texto: String, onClick: () -> Unit) {
+    Text(
+        texto, fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick).padding(16.dp),
     )
 }
