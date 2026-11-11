@@ -159,6 +159,8 @@ class Sesion : ViewModel() {
 
     fun salir() {
         viewModelScope.launch {
+            // El teléfono deja de recibir avisos de esta cuenta.
+            runCatching { com.orbitasinertegia.orbita.avisos.PushService.quitar() }
             Repo.signOut()
             perfil = null
             fase = Fase.Login
@@ -205,6 +207,8 @@ fun OrbitaApp(sesion: Sesion = viewModel()) {
                     com.orbitasinertegia.orbita.avisos.AvisosWorker.programar(context)
                 }
             }
+            // Push: registra este teléfono con la cuenta (si el teléfono tiene Google Play).
+            LaunchedEffect(sesion.perfil?.id) { runCatching { com.orbitasinertegia.orbita.avisos.PushService.registrar() } }
             LaunchedEffect(Enlaces.citaPorAbrir) {
                 Enlaces.citaPorAbrir?.let { sesion.ir(Ruta.Detalle(it)); Enlaces.citaPorAbrir = null }
             }
