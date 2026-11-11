@@ -27,6 +27,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -208,6 +209,24 @@ fun OrbitaApp(sesion: Sesion = viewModel()) {
             }
             // Push: registra este teléfono con la cuenta (si el teléfono tiene Google Play).
             LaunchedEffect(sesion.perfil?.id) { runCatching { com.orbitasinertegia.orbita.avisos.PushService.registrar() } }
+            // Aviso de versión nueva (fuera de Google Play no se instala sola).
+            var versionNueva by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(Unit) { versionNueva = com.orbitasinertegia.orbita.data.Actualizacion.versionNueva(context) }
+            versionNueva?.let { v ->
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = { versionNueva = null },
+                    title = { Text("Hay una versión nueva") },
+                    text = { Text("Órbita Citas $v ya está disponible. Se instala encima de la que tienes y conservas tu sesión.") },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(onClick = {
+                            versionNueva = null
+                            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(com.orbitasinertegia.orbita.data.Actualizacion.DESCARGA)))
+                        }) { Text("Actualizar") }
+                    },
+                    dismissButton = { androidx.compose.material3.TextButton(onClick = { versionNueva = null }) { Text("Después") } },
+                )
+            }
             LaunchedEffect(Enlaces.citaPorAbrir) {
                 Enlaces.citaPorAbrir?.let { sesion.ir(Ruta.Detalle(it)); Enlaces.citaPorAbrir = null }
             }
