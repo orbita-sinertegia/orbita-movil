@@ -126,9 +126,10 @@ class Sesion : ViewModel() {
         val rawNonce = java.util.UUID.randomUUID().toString()
         val hashed = java.security.MessageDigest.getInstance("SHA-256").digest(rawNonce.toByteArray())
             .joinToString("") { "%02x".format(it) }
-        val opcion = com.google.android.libraries.identity.googleid.GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(com.orbitasinertegia.orbita.BuildConfig.GOOGLE_WEB_CLIENT_ID)
+        // Selector completo de cuentas de Google ("Iniciar sesión con Google"): muestra todas las cuentas
+        // del teléfono y permite agregar una, no solo las que ya usaron la app.
+        val opcion = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+            .Builder(com.orbitasinertegia.orbita.BuildConfig.GOOGLE_WEB_CLIENT_ID)
             .setNonce(hashed)
             .build()
         val pedido = androidx.credentials.GetCredentialRequest.Builder().addCredentialOption(opcion).build()
@@ -138,13 +139,11 @@ class Sesion : ViewModel() {
             Repo.signInWithGoogle(google.idToken, rawNonce)
         } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
             return
-        } catch (e: androidx.credentials.exceptions.NoCredentialException) {
-            errorLogin = "No hay una cuenta de Google en este teléfono. Agrégala en Ajustes o entra con tu correo."
-            return
         } catch (e: androidx.credentials.exceptions.GetCredentialException) {
-            errorLogin = if ((e.message ?: "").contains("28444") || (e.message ?: "").contains("Developer console", true))
-                "Google todavía no está configurado para esta app. Entra con tu correo."
-            else "No se pudo entrar con Google. Inténtalo de nuevo o entra con tu correo."
+            // Android responde "sin credenciales" también cuando la app no está dada de alta en Google Cloud
+            // (ID de cliente Android con el paquete y la huella SHA-1 de la firma).
+            android.util.Log.w("Orbita", "Google: ${e.type} ${e.message}")
+            errorLogin = "No se pudo entrar con Google. Si el problema sigue, el administrador debe dar de alta la app en Google Cloud. Mientras tanto, entra con tu correo."
             return
         } catch (e: Exception) {
             errorLogin = e.friendly()
