@@ -51,6 +51,11 @@ import com.orbitasinertegia.orbita.ui.theme.Violeta
 import com.orbitasinertegia.orbita.ui.theme.VioletaClaro
 import kotlinx.coroutines.launch
 
+/** Cita que pidió abrir una notificación; la app navega a ella en cuanto hay sesión. */
+object Enlaces {
+    var citaPorAbrir by mutableStateOf<String?>(null)
+}
+
 sealed interface Ruta {
     data object Inicio : Ruta
     data class Detalle(val id: String) : Ruta
@@ -189,6 +194,20 @@ fun OrbitaApp(sesion: Sesion = viewModel()) {
         }
         Fase.Login -> LoginScreen(sesion)
         Fase.Lista -> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val permiso = androidx.activity.compose.rememberLauncherForActivityResult(
+                androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+            ) { com.orbitasinertegia.orbita.avisos.AvisosWorker.programar(context) }
+            LaunchedEffect(Unit) {
+                if (android.os.Build.VERSION.SDK_INT >= 33 && !com.orbitasinertegia.orbita.avisos.Notificaciones.permitidas(context)) {
+                    permiso.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    com.orbitasinertegia.orbita.avisos.AvisosWorker.programar(context)
+                }
+            }
+            LaunchedEffect(Enlaces.citaPorAbrir) {
+                Enlaces.citaPorAbrir?.let { sesion.ir(Ruta.Detalle(it)); Enlaces.citaPorAbrir = null }
+            }
             BackHandler(enabled = sesion.pila.size > 1) { sesion.atras() }
             val ruta = sesion.pila.last()
             key(ruta, sesion.navegaciones) {

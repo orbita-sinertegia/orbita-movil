@@ -205,17 +205,34 @@ object Repo {
 
     private suspend fun rpc(name: String, params: JsonObject) = client.postgrest.rpc(name, params)
 
-    suspend fun requestAppointment(projectId: String?, kind: String, reason: String, slots: List<Slot>): String =
+    suspend fun requestAppointment(projectId: String?, kind: String, reason: String, slots: List<Slot>, lugar: Lugar?): String =
         rpc("request_appointment", buildJsonObject {
             put("p_project_id", projectId)
             put("p_kind", kind)
             put("p_reason", reason)
             put("p_slots", slotsJson(slots))
+            put("p_location_kind", lugar?.tipo)
+            put("p_place_id", lugar?.placeId)
+            put("p_address", lugar?.direccion)
+            put("p_lat", lugar?.lat)
+            put("p_lng", lugar?.lng)
+        }).decodeAs<String>()
+
+    suspend fun places(): List<Place> =
+        client.from("appointment_places").select {
+            filter { eq("active", true) }
+            order("name", Order.ASCENDING)
+        }.decodeList()
+
+    suspend fun addPlace(name: String, address: String?, lat: Double?, lng: Double?): String =
+        rpc("add_appointment_place", buildJsonObject {
+            put("p_name", name); put("p_address", address); put("p_lat", lat); put("p_lng", lng)
         }).decodeAs<String>()
 
     suspend fun scheduleAppointment(
         appointmentId: String?, projectId: String?, kind: String, title: String, slot: Slot,
         modality: String, location: String?, meetingUrl: String?, invitees: List<Invitee>, relatedTaskId: String?,
+        lugar: Lugar? = null,
     ): String = rpc("schedule_appointment", buildJsonObject {
         put("p_appointment_id", appointmentId)
         put("p_project_id", projectId)
@@ -236,6 +253,11 @@ object Repo {
             }
         }
         put("p_related_task_id", relatedTaskId)
+        put("p_location_kind", lugar?.tipo)
+        put("p_place_id", lugar?.placeId)
+        put("p_address", lugar?.direccion)
+        put("p_lat", lugar?.lat)
+        put("p_lng", lugar?.lng)
     }).decodeAs<String>()
 
     suspend fun conflicts(slot: Slot, userIds: List<String>, excludeAppointment: String?): List<Conflict> {

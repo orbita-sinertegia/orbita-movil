@@ -138,7 +138,10 @@ fun DetalleScreen(sesion: Sesion, id: String) {
                     Dato(Icons.Outlined.CalendarMonth, "Sin fecha todavía", "Un administrador elegirá el horario.")
                 }
                 when (c.modality) {
-                    "presencial" -> Dato(Icons.Outlined.Place, "Presencial", c.location ?: "Lugar por definir")
+                    "presencial" -> Dato(
+                        Icons.Outlined.Place, "Presencial",
+                        listOfNotNull(c.location ?: "Lugar por definir", c.address).joinToString("\n"),
+                    )
                     "virtual" -> Dato(Icons.Outlined.Videocam, "Virtual", plataforma(c.meetingUrl)?.let { "Por $it" } ?: "Enlace por definir")
                 }
                 if (c.modality == "virtual" && c.meetingUrl != null && c.status in listOf("programada", "en_curso")) {
@@ -146,6 +149,14 @@ fun DetalleScreen(sesion: Sesion, id: String) {
                     BotonPrincipal(
                         "Unirse por ${plataforma(c.meetingUrl)}",
                         onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, c.meetingUrl.toUri())) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                val mapa = com.orbitasinertegia.orbita.data.mapsUrl(c.address, c.latitude, c.longitude)
+                if (c.modality == "presencial" && mapa != null && c.status in listOf("solicitada", "programada", "en_curso")) {
+                    BotonSecundario(
+                        "Cómo llegar (Google Maps)",
+                        onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, mapa.toUri())) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
