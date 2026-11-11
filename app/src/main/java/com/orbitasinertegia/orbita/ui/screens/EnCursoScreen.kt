@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -133,7 +134,14 @@ fun EnCursoScreen(sesion: Sesion, id: String) {
 
             Tarjeta {
                 Titulo("Evidencia")
-                Text("Las fotos y archivos de evidencia llegarán en la siguiente versión.", color = TextoSuave, fontSize = 14.sp)
+                Row(
+                    Modifier.fillMaxWidth().background(com.orbitasinertegia.orbita.ui.theme.Crema, RoundedCornerShape(14.dp)).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(androidx.compose.material.icons.Icons.Outlined.PhotoCamera, null, tint = Color(0xFF8A4B00))
+                    Spacer(Modifier.size(12.dp))
+                    Text("La subida de fotos y PDF llegará en la siguiente versión.", color = Color(0xFF8A4B00), fontSize = 15.sp)
+                }
             }
 
             Tarjeta {
