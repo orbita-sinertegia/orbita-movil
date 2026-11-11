@@ -99,6 +99,7 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
     var horario by remember { mutableStateOf<Slot?>(null) }
     var modalidad by remember { mutableStateOf("virtual") }
     var lugar by remember { mutableStateOf("") }
+    val sitio = remember { com.orbitasinertegia.orbita.ui.EstadoLugar("estudio") }
     var enlace by remember { mutableStateOf("") }
     val invitados = remember { mutableStateListOf<Invitee>() }
     var tarea by remember { mutableStateOf<TaskLite?>(null) }
@@ -123,6 +124,12 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
             horario = if (c.startsAt != null && c.endsAt != null) Slot(c.startsAt, c.endsAt) else c.proposedSlots.firstOrNull()
             modalidad = c.modality ?: Kinds.suggestedModality(c.kind)
             lugar = c.location.orEmpty()
+            sitio.tipo = c.locationKind ?: if (c.location != null) "otro" else "estudio"
+            sitio.sitioInicial = c.placeId
+            sitio.direccion = c.address.orEmpty()
+            sitio.lat = c.latitude
+            sitio.lng = c.longitude
+            if (sitio.tipo == "otro") sitio.nombre = c.location.orEmpty()
             enlace = c.meetingUrl.orEmpty()
             c.participants.filter { it.userId != sesion.myId && it.user != null }.forEach {
                 invitados.add(Invitee(it.user!!, it.required, it.roleLabel ?: etiquetaRol(it.user)))
@@ -151,7 +158,7 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
         listOfNotNull(sesion.perfil?.name?.takeIf { sesion.myId?.let(::ocupado) == true }?.let { "Tú" })
     val opcionalesOcupados = invitados.filter { !it.required && ocupado(it.user.id) }.map { it.user.name }
     val listo = titulo.trim().length >= 3 && horario != null && invitados.isNotEmpty() &&
-        (if (modalidad == "presencial") lugar.trim().length >= 2 else enlace.trim().startsWith("https://")) && bloqueados.isEmpty()
+        (if (modalidad == "presencial") sitio.completo(estricto = true) else enlace.trim().startsWith("https://")) && bloqueados.isEmpty()
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).imePadding()) {
         BarraClara(if (cita?.status == "programada") "Reprogramar cita" else "Programar cita", onBack = { sesion.atras() }) {
@@ -218,7 +225,7 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
             }
             if (modalidad == "presencial") Column {
                 Etiqueta("Lugar")
-                OutlinedTextField(lugar, { lugar = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Ej. Estudio Órbita") })
+                com.orbitasinertegia.orbita.ui.SelectorLugar(sitio, esAdmin = true, alSolicitar = false)
             } else Column {
                 Etiqueta("Enlace de Meet o Zoom")
                 OutlinedTextField(
@@ -299,7 +306,9 @@ fun ProgramarScreen(sesion: Sesion, id: String?) {
                         runCatching {
                             Repo.scheduleAppointment(
                                 id, proyecto?.id, tipo, titulo.trim(), horario!!, modalidad,
-                                lugar.trim().ifBlank { null }, enlace.trim().ifBlank { null }, invitados.toList(), tarea?.id,
+                                (if (sitio.tipo == "otro") sitio.nombre else lugar).trim().ifBlank { null },
+                                enlace.trim().ifBlank { null }, invitados.toList(), tarea?.id,
+                                if (modalidad == "presencial") sitio.aLugar() else null,
                             )
                         }.onSuccess { nueva ->
                             // Cambia esta pantalla por el detalle actualizado, sin duplicarlo en la pila.
