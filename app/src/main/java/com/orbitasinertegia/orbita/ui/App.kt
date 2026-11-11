@@ -98,6 +98,8 @@ class Sesion : ViewModel() {
         val motivo = when {
             p == null -> "Tu cuenta no tiene acceso. Abre tu invitación en la web de Órbita."
             p.active == false -> "Tu cuenta está desactivada. Contacta al administrador."
+            // La app móvil es para clientes y administradores. El equipo trabaja desde la web.
+            !p.isAdmin && p.role != "client" -> "La app móvil es solo para clientes y administradores. Entra a Órbita desde la web."
             p.isSuperAdmin != true && Repo.licenseSuspended() -> "La licencia de la agencia está suspendida. Contacta al administrador."
             else -> null
         }
