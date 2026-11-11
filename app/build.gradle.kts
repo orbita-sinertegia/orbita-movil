@@ -13,6 +13,13 @@ val localProps = Properties().apply {
 }
 fun localProp(name: String) = (localProps.getProperty(name) ?: "").replace("\"", "")
 
+// Firma de la versión para publicar. La llave y su contraseña viven FUERA del repositorio;
+// local.properties solo dice dónde está el archivo (firma.archivo=C:/Users/.../orbita-firma.properties).
+val firma = Properties().apply {
+    val ruta = localProp("firma.archivo")
+    if (ruta.isNotBlank() && file(ruta).exists()) file(ruta).inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.orbitasinertegia.orbita"
     compileSdk {
@@ -23,8 +30,8 @@ android {
         applicationId = "com.orbitasinertegia.orbita"
         minSdk = 30
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"${localProp("supabase.url")}\"")
@@ -34,8 +41,20 @@ android {
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"614135047244-sgsnsavc2u5pdvjkkg3pjhnvksj6no3l.apps.googleusercontent.com\"")
     }
 
+    signingConfigs {
+        if (firma.getProperty("storeFile") != null) {
+            create("publicacion") {
+                storeFile = file(firma.getProperty("storeFile"))
+                storePassword = firma.getProperty("storePassword")
+                keyAlias = firma.getProperty("keyAlias")
+                keyPassword = firma.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("publicacion")?.let { signingConfig = it }
             optimization {
                 enable = false
             }
@@ -66,6 +85,7 @@ dependencies {
     implementation(libs.supabase.postgrest)
     implementation(libs.supabase.auth)
     implementation(libs.supabase.storage)
+    implementation(libs.androidx.work)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play)
     implementation(libs.googleid)

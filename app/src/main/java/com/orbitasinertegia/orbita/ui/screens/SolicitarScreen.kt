@@ -170,6 +170,8 @@ fun SolicitarScreen(sesion: Sesion) {
     var enviando by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val esCliente = sesion.perfil?.role == "client"
+    val lugar = remember { com.orbitasinertegia.orbita.ui.EstadoLugar("estudio") }
+    val presencial = Kinds.suggestedModality(tipo) == "presencial"
 
     LaunchedEffect(Unit) {
         runCatching { Repo.projects() }.onSuccess {
@@ -196,6 +198,10 @@ fun SolicitarScreen(sesion: Sesion) {
                         if (Kinds.suggestedModality(tipo) == "virtual") " por Meet o Zoom." else ".",
                 ).joinToString(" · "),
             )
+            if (presencial) Column {
+                Etiqueta("¿Dónde será?")
+                com.orbitasinertegia.orbita.ui.SelectorLugar(lugar, esAdmin = sesion.isAdmin, alSolicitar = true)
+            }
             Column {
                 Etiqueta("Motivo")
                 OutlinedTextField(
@@ -227,13 +233,14 @@ fun SolicitarScreen(sesion: Sesion) {
                 onClick = {
                     enviando = true; error = null
                     scope.launch {
-                        runCatching { Repo.requestAppointment(proyecto?.id, tipo, motivo.trim(), horarios.toList()) }
+                        runCatching { Repo.requestAppointment(proyecto?.id, tipo, motivo.trim(), horarios.toList(), if (presencial) lugar.aLugar() else null) }
                             .onSuccess { sesion.reemplazar(Ruta.Detalle(it)) }
                             .onFailure { error = it.friendly() }
                         enviando = false
                     }
                 },
-                enabled = !enviando && horarios.isNotEmpty() && motivo.trim().length >= 3 && (!esCliente || proyecto != null),
+                enabled = !enviando && horarios.isNotEmpty() && motivo.trim().length >= 3 && (!esCliente || proyecto != null) &&
+                    (!presencial || lugar.completo(estricto = false)),
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(

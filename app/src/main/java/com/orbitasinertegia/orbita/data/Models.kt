@@ -62,6 +62,11 @@ data class Appointment(
     val status: String,
     val modality: String? = null,
     val location: String? = null,
+    @SerialName("location_kind") val locationKind: String? = null,
+    @SerialName("place_id") val placeId: String? = null,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     @SerialName("meeting_url") val meetingUrl: String? = null,
     @SerialName("starts_at") val startsAt: String? = null,
     @SerialName("ends_at") val endsAt: String? = null,
@@ -109,6 +114,34 @@ data class AppointmentFile(
     @SerialName("visible_to_client") val visibleToClient: Boolean = false,
 ) {
     val esImagen get() = mimeType.startsWith("image/")
+}
+
+/** Lugar de la agencia (estudio, bunker...). */
+@Serializable
+data class Place(
+    val id: String,
+    val name: String,
+    val address: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val active: Boolean = true,
+)
+
+/** Dónde es una cita presencial: estudio de la agencia, domicilio del cliente u otro lugar. */
+data class Lugar(
+    val tipo: String,
+    val placeId: String? = null,
+    val nombre: String? = null,
+    val direccion: String? = null,
+    val lat: Double? = null,
+    val lng: Double? = null,
+)
+
+/** Enlace de Google Maps para una dirección o un punto. */
+fun mapsUrl(direccion: String?, lat: Double?, lng: Double?): String? = when {
+    lat != null && lng != null -> "https://www.google.com/maps/search/?api=1&query=$lat,$lng"
+    !direccion.isNullOrBlank() -> "https://www.google.com/maps/search/?api=1&query=" + java.net.URLEncoder.encode(direccion, "UTF-8")
+    else -> null
 }
 
 @Serializable
